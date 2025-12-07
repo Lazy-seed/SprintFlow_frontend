@@ -53,6 +53,12 @@ interface BoardState {
     deleteTask: (taskId: string) => Promise<void>;
     moveTask: (taskId: string, sourceColumnId: string, destColumnId: string, newPosition: number) => void;
     reorderTasksInColumn: (columnId: string, taskId: string, newPosition: number) => void;
+
+    // Column Actions
+    addColumn: (boardId: string, column: any) => void;
+    updateColumn: (columnId: string, updates: any) => void;
+    deleteColumn: (columnId: string) => void;
+    reorderColumns: (boardId: string, columnIds: string[]) => void;
 }
 
 export const useBoardStore = create<BoardState>((set, get) => ({
@@ -232,6 +238,52 @@ export const useBoardStore = create<BoardState>((set, get) => ({
             }
             return col;
         });
+
+        set({ currentBoard: { ...currentBoard, columns: updatedColumns } });
+    },
+
+    // ==================== COLUMN ACTIONS ====================
+
+    addColumn: (boardId: string, column: any) => {
+        const { currentBoard } = get();
+        if (!currentBoard) return;
+
+        set({
+            currentBoard: {
+                ...currentBoard,
+                columns: [...currentBoard.columns, { ...column, tasks: [] }],
+            },
+        });
+    },
+
+    updateColumn: (columnId: string, updates: any) => {
+        const { currentBoard } = get();
+        if (!currentBoard) return;
+
+        const updatedColumns = currentBoard.columns.map((col: Column) =>
+            col.id === columnId ? { ...col, ...updates } : col
+        );
+
+        set({ currentBoard: { ...currentBoard, columns: updatedColumns } });
+    },
+
+    deleteColumn: (columnId: string) => {
+        const { currentBoard } = get();
+        if (!currentBoard) return;
+
+        const updatedColumns = currentBoard.columns.filter((col: Column) => col.id !== columnId);
+        set({ currentBoard: { ...currentBoard, columns: updatedColumns } });
+    },
+
+    reorderColumns: (boardId: string, columnIds: string[]) => {
+        const { currentBoard } = get();
+        if (!currentBoard) return;
+
+        // Sort columns based on the new order of IDs
+        const currentColumns = [...currentBoard.columns];
+        const updatedColumns = columnIds
+            .map((id) => currentColumns.find((col) => col.id === id))
+            .filter(Boolean) as Column[];
 
         set({ currentBoard: { ...currentBoard, columns: updatedColumns } });
     },
