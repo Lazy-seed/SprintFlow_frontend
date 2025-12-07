@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useBoardStore } from '@/store/board-store';
 import { Navbar } from '@/components/layout/navbar';
+import { LoadingSpinner } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -29,7 +30,7 @@ export default function WorkspacePage() {
     const params = useParams();
     const workspaceId = params.id as string;
 
-    const { isAuthenticated } = useAuthStore();
+    const { isAuthenticated, isInitialized, initialize } = useAuthStore();
     const { workspaces, fetchWorkspaces } = useWorkspaceStore();
     const { boards, fetchBoards, createBoard, isLoading } = useBoardStore();
 
@@ -43,17 +44,25 @@ export default function WorkspacePage() {
     });
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        // Initialize auth store on mount
+        initialize();
+    }, []);
+
+    useEffect(() => {
+        // Only redirect after store is initialized
+        if (isInitialized && !isAuthenticated) {
             router.push('/login');
             return;
         }
 
-        if (!workspace) {
+        if (isInitialized && !workspace) {
             fetchWorkspaces();
         }
 
-        loadBoards();
-    }, [isAuthenticated, workspaceId]);
+        if (isInitialized) {
+            loadBoards();
+        }
+    }, [isAuthenticated, isInitialized, workspaceId]);
 
     const loadBoards = async () => {
         try {
@@ -76,6 +85,9 @@ export default function WorkspacePage() {
             setIsSubmitting(false);
         }
     };
+
+    // Show loading spinner while initializing
+    if (!isInitialized || isLoading) return <LoadingSpinner />;
 
     if (!isAuthenticated) return null;
 

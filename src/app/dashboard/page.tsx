@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { Navbar } from '@/components/layout/navbar';
+import { LoadingSpinner } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreateWorkspaceModal } from '@/components/create-workspace-modal';
@@ -11,17 +12,23 @@ import { toast } from 'sonner';
 
 export default function DashboardPage() {
     const router = useRouter();
-    const { user, isAuthenticated } = useAuthStore();
+    const { user, isAuthenticated, isInitialized, initialize } = useAuthStore();
     const { workspaces, fetchWorkspaces, isLoading } = useWorkspaceStore();
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     useEffect(() => {
-        if (!isAuthenticated) {
+        // Initialize auth store on mount
+        initialize();
+    }, []);
+
+    useEffect(() => {
+        // Only redirect after store is initialized
+        if (isInitialized && !isAuthenticated) {
             router.push('/login');
-        } else {
+        } else if (isInitialized && isAuthenticated) {
             loadWorkspaces();
         }
-    }, [isAuthenticated, router]);
+    }, [isAuthenticated, isInitialized, router]);
 
     const loadWorkspaces = async () => {
         try {
@@ -34,6 +41,11 @@ export default function DashboardPage() {
     const handleWorkspaceCreated = () => {
         loadWorkspaces();
     };
+
+    // Show loading spinner while initializing
+    if (!isInitialized) {
+        return <LoadingSpinner />;
+    }
 
     if (!isAuthenticated || !user) {
         return null;

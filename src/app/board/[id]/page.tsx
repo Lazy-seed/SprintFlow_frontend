@@ -5,10 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 import { useBoardStore } from '@/store/board-store';
 import { Navbar } from '@/components/layout/navbar';
+import { LoadingSpinner } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { TaskCard } from '@/components/board/task-card';
 import { CreateTaskModal } from '@/components/board/create-task-modal';
+import { TaskDetailPanel } from '@/components/board/task-detail-panel';
 import { toast } from 'sonner';
 import {
     DndContext,
@@ -24,7 +26,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-function SortableTask({ task, isOverlay = false }: { task: any; isOverlay?: boolean }) {
+function SortableTask({ task, isOverlay = false, onClick }: { task: any; isOverlay?: boolean; onClick?: () => void }) {
     const {
         attributes,
         listeners,
@@ -43,7 +45,7 @@ function SortableTask({ task, isOverlay = false }: { task: any; isOverlay?: bool
 
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-            <TaskCard task={task} />
+            <TaskCard task={task} onClick={onClick} />
         </div>
     );
 }
@@ -51,11 +53,13 @@ function SortableTask({ task, isOverlay = false }: { task: any; isOverlay?: bool
 function DroppableColumn({
     column,
     onAddTask,
+    onTaskClick,
     isOver,
     activeTaskId,
 }: {
     column: any;
     onAddTask: () => void;
+    onTaskClick: (taskId: string) => void;
     isOver: boolean;
     activeTaskId: string | null;
 }) {
@@ -64,8 +68,8 @@ function DroppableColumn({
     return (
         <Card
             className={`p-4 transition-all ${isOver
-                    ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 dark:border-blue-500'
-                    : 'bg-gray-100 dark:bg-gray-800 border-2 border-transparent'
+                ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-400 dark:border-blue-500'
+                : 'bg-gray-100 dark:bg-gray-800 border-2 border-transparent'
                 }`}
         >
             <div className="flex items-center justify-between mb-4">
@@ -90,15 +94,15 @@ function DroppableColumn({
                 <div className="min-h-[200px] space-y-2">
                     {column.tasks?.map((task: any, index: number) => (
                         <div key={task.id}>
-                            <SortableTask task={task} />
+                            <SortableTask task={task} onClick={() => onTaskClick(task.id)} />
                         </div>
                     ))}
 
                     {column.tasks?.length === 0 && (
                         <div
                             className={`text-center py-8 text-sm border-2 border-dashed rounded-lg transition-all ${isOver
-                                    ? 'border-blue-400 dark:border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                    : 'border-gray-300 dark:border-gray-600 text-gray-400'
+                                ? 'border-blue-400 dark:border-blue-500 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                                : 'border-gray-300 dark:border-gray-600 text-gray-400'
                                 }`}
                         >
                             {isOver ? '📍 Drop here' : 'Drop tasks here or click + to add'}
@@ -122,7 +126,7 @@ export default function BoardPage() {
     const params = useParams();
     const boardId = params.id as string;
 
-    const { isAuthenticated } = useAuthStore();
+    const { isAuthenticated, isInitialized, initialize } = useAuthStore();
     const { currentBoard, fetchBoardDetails, moveTask, reorderTasksInColumn, isLoading } = useBoardStore();
 
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -130,6 +134,8 @@ export default function BoardPage() {
     const [activeTask, setActiveTask] = useState<any>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [overColumnId, setOverColumnId] = useState<string | null>(null);
+    const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+    const [isTaskDetailOpen, setIsTaskDetailOpen] = useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -140,15 +146,21 @@ export default function BoardPage() {
     );
 
     useEffect(() => {
-        if (!isAuthenticated && !isDragging) {
+        // Initialize auth store on mount
+        initialize();
+    }, []);
+
+    useEffect(() => {
+        // Only redirect after store is initialized
+        if (isInitialized && !isAuthenticated && !isDragging) {
             router.push('/login');
             return;
         }
 
-        if (isAuthenticated && !currentBoard) {
+        if (isInitialized && isAuthenticated && !currentBoard) {
             loadBoard();
         }
-    }, [isAuthenticated, boardId, isDragging]);
+    }, [isAuthenticated, isInitialized, boardId, isDragging]);
 
     const loadBoard = async () => {
         try {
@@ -279,19 +291,31 @@ export default function BoardPage() {
         loadBoard();
     };
 
+    const handleTaskClick = (taskId: string) => {
+        setSelectedTaskId(taskId);
+        setIsTaskDetailOpen(true);
+    };
+
+    const handleTaskDetailClose = () => {
+        setIsTaskDetailOpen(false);
+        setSelectedTaskId(null);
+    };
+
+    const handleTaskUpdate = () => {
+        loadBoard();
+    };
+
+    // Show loading spinner while initializing
+    if (!isInitialized) {
+        return <LoadingSpinner />;
+    }
+
     if (!isAuthenticated && !isDragging) {
-        return null;
+        return <LoadingSpinner />;
     }
 
     if (isLoading || !currentBoard) {
-        return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-                <Navbar title="Loading..." showBack backUrl="/dashboard" />
-                <div className="flex items-center justify-center h-96">
-                    <p className="text-gray-500">Loading board...</p>
-                </div>
-            </div>
-        );
+        return <LoadingSpinner />;
     }
 
     return (
@@ -322,6 +346,7 @@ export default function BoardPage() {
                                 <DroppableColumn
                                     column={column}
                                     onAddTask={() => handleCreateTask(column.id, column.name)}
+                                    onTaskClick={handleTaskClick}
                                     isOver={overColumnId === column.id}
                                     activeTaskId={activeTask?.id || null}
                                 />
@@ -347,6 +372,15 @@ export default function BoardPage() {
                     columnId={selectedColumn.id}
                     columnName={selectedColumn.name}
                     onSuccess={handleTaskCreated}
+                />
+            )}
+
+            {selectedTaskId && (
+                <TaskDetailPanel
+                    taskId={selectedTaskId}
+                    isOpen={isTaskDetailOpen}
+                    onClose={handleTaskDetailClose}
+                    onUpdate={handleTaskUpdate}
                 />
             )}
         </div>
